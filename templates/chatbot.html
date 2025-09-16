@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Chatbot</title>
+
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Chat CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <div id="chat-container">
+    <header class="header">
+      <h2>Talk to the AI Chatbot</h2>
+      <a class="home" href="{{ url_for('home') }}">← Home</a>
+    </header>
+
+    <div id="chat-box" aria-live="polite"></div>
+
+    <div class="input-row">
+      <input type="text" id="user-input" placeholder="Type your message…" autocomplete="off" />
+      <button id="send-btn" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const chatBox = document.getElementById("chat-box");
+    const inputField = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+
+    // greet once
+    appendMessage("bot", "Hello! How can I help you today?");
+
+    // Enter to send
+    inputField.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    function appendMessage(sender, text) {
+      const wrap = document.createElement("div");
+      wrap.className = `message ${sender}`;
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+      wrap.appendChild(bubble);
+
+      chatBox.appendChild(wrap);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // typing indicator
+    let typingEl = null;
+    function showTyping() {
+      typingEl = document.createElement("div");
+      typingEl.className = "message bot";
+      const bubble = document.createElement("div");
+      bubble.className = "bubble typing";
+      bubble.innerHTML = "<span></span><span></span><span></span>";
+      typingEl.appendChild(bubble);
+      chatBox.appendChild(typingEl);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+    function hideTyping() {
+      if (typingEl && typingEl.parentNode) typingEl.parentNode.removeChild(typingEl);
+      typingEl = null;
+    }
+
+    async function sendMessage() {
+      const message = inputField.value.trim();
+      if (!message) return;
+
+      appendMessage("user", message);
+      inputField.value = "";
+      inputField.focus();
+
+      showTyping();
+      sendBtn.disabled = true;
+
+      try {
+        const res = await fetch("{{ url_for('get_response') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message })
+        });
+        const data = await res.json();
+        hideTyping();
+        appendMessage("bot", data.response ?? "…");
+      } catch (err) {
+        hideTyping();
+        appendMessage("bot", "Oops, something went wrong.");
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
