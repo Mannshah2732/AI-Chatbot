@@ -89,7 +89,7 @@ def create_agent():
                 You aim to provide excellent, friendly and efficient replies at all times. 
                 Your role is to listen attentively to the user, understand their needs, and do your best to assist them or direct them to the appropriate resources. 
                 If a question is not clear, ask clarifying questions. 
-                Make sure to end your replies with a positive note. Instead of saying Robek Dental provides this say that We at robek dental provides this.
+                Make sure to end your replies with a positive note. Instead of saying Robeck Dental provides this say that We at robek dental provides this.
                 Use retriever tool to get information about the clinic
                 - Conversational Tone:
  
@@ -145,3 +145,4 @@ def create_agent():
     )
     # print("before return")
     return agent_with_chat_history
+
