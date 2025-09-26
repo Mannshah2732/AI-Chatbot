@@ -104,6 +104,7 @@ def send_to_make(payload: dict):
     if MAKE_WEBHOOK_SECRET:
         headers["X-Webhook-Secret"] = MAKE_WEBHOOK_SECRET
     try:
+        print(MAKE_WEBHOOK_URL)
         r = requests.post(MAKE_WEBHOOK_URL, json=payload, headers=headers, timeout=10)
         r.raise_for_status()
         return True, r.text
@@ -251,6 +252,91 @@ def get_response():
         )
 
         return jsonify({"response": final_message, "log_id": log_id, "chat_id": chat_id})
+
+    except Exception as e:
+        return jsonify({"response": f"Error: {str(e)}", "chat_id": chat_id})
+    
+
+# Make route
+@app.route('/get_response_make', methods=['POST'])
+def get_response_make():
+    user_input = request.json.get("message", "").strip()
+    chat_id = (request.json or {}).get("chat_id") or "robeck-dental"
+    client_id = "robeck_dental"
+
+    if not user_input:
+        return jsonify({"response": "Please enter a valid message."})
+
+    agent = create_agent()
+
+    try:
+        raw = agent.invoke(
+            {"input": user_input},
+            {"configurable": {"session_id": chat_id}}
+        )
+
+        # 1) Normalize agent output to `out`
+        out = raw["output"] if isinstance(raw, dict) and "output" in raw else raw
+
+        final_message = None
+        lead_payload = None
+
+        # 2) If dict already (e.g., {"type":"text","text":"..."})
+        if isinstance(out, dict):
+            if out.get("type") == "text" and "text" in out:
+                final_message = out["text"]
+            elif out.get("type") == "leads" and "leads" in out:
+                lead_payload = out["leads"]
+                final_message = out.get("message") or "Thanks! I’ve recorded your details."
+            else:
+                # Unknown dict → return as-is
+                return jsonify(out)
+
+        # 3) If string, try JSON first, else treat as plain text
+        elif isinstance(out, str):
+            s = out.strip()
+            if s.startswith("{") and s.endswith("}"):
+                try:
+                    j = json.loads(s)
+                    if isinstance(j, dict) and j.get("type") == "text" and "text" in j:
+                        final_message = j["text"]
+                    elif isinstance(j, dict) and j.get("type") == "leads" and "leads" in j:
+                        lead_payload = j["leads"]
+                        final_message = j.get("message") or "Thanks! I’ve recorded your details."
+                    else:
+                        return jsonify(j)
+                except json.JSONDecodeError:
+                    final_message = s
+            else:
+                final_message = s
+        else:
+            final_message = str(out)
+
+        
+        is_lead = 0
+        if lead_payload:
+            leads = _normalize_leads(lead_payload)
+            raw_phone = leads.get("phone") if leads else None
+            phone = normalize_phone(raw_phone) or normalize_phone(user_input)  # fallback: extract from the user message
+
+            if leads:  # only proceed if we have a dict
+                payload = {
+                    "timestamp": datetime.datetime.now().isoformat() + "Z",
+                    "client_id": client_id,
+                    "chat_id": chat_id,
+                    "name": leads.get("name"),
+                    "phone": phone,
+                    "email": leads.get("email"),
+                    "consent": bool(leads.get("consent", True)),
+                    "source": "chatbot",
+                    "latest_user_message": user_input,
+                    "latest_ai_message": final_message,
+                }
+                send_to_make(payload)
+                is_lead = 1
+
+        
+        return jsonify({"response": final_message,  "chat_id": chat_id})
 
     except Exception as e:
         return jsonify({"response": f"Error: {str(e)}", "chat_id": chat_id})
